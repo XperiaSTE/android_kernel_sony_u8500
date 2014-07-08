@@ -14,12 +14,21 @@
 #include <linux/slab.h>
 #include <linux/mfd/dbx500-prcmu.h>
 #include <mach/id.h>
+#include <asm/io.h>
 #include <linux/mfd/db8500-liveopp.h>
 
 static __iomem void *prcmu_base;
 
 #define PRCM_ACK_MB1 0xE04
 #define PRCM_ACK_MB1_CURRENT_ARM_OPP	(PRCM_ACK_MB1 + 0x0)
+
+/* Registers for ARM 100 OPP */
+u8 varm_raw_rec=0x24;
+u8 vbb_raw_rec=0xDB;
+
+/* Registers for  1200MHz */
+u8 varm_raw=0x3F;
+u8 vbb_raw=0x8F;
 
 unsigned int last_idx;
 
@@ -143,8 +152,8 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 		if (last_idx==1){
 			db8500_prcmu_set_arm_opp(ARM_100_OPP);
 			prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw_rec, 1);
-			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBB_REG, &vbb_raw_rec, 1);
-			db8500_prcmu_write(PRCMU_ARMPLL_REG,PLLARM_FREQ100OPP);}
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG, &vbb_raw_rec, 1);
+			db8500_prcmu_write(PRCMU_PLLARM_REG,PLLARM_FREQ100OPP);}
 	if (prcmu_set_arm_opp(idx2opp[idx])) {
 		pr_err("ux500-cpufreq:  Failed to set OPP level\n");
 		return -EINVAL;
@@ -159,10 +168,10 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 	/* Varm */
 	prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw, 1);
 	/* VBBp/VBBn */
-	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBB_REG, &vbb_raw, 1);
+	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG, &vbb_raw, 1);
 	/* Frequency */
-	db8500_prcmu_write(PRCMU_ARMPLL_REG,PLLARM_MAXOPP);
-	db8500_prcmu_write(PRCMU_ARMPLL_REG, 0x0004017D);
+	db8500_prcmu_write(PRCMU_PLLARM_REG,PLLARM_MAXOPP);
+	db8500_prcmu_write(PRCMU_PLLARM_REG, 0x0004017D);
 	writeb(ARM_MAX_OPP,(prcmu_base + PRCM_ACK_MB1_CURRENT_ARM_OPP));}
 
 	/* post change notification */
