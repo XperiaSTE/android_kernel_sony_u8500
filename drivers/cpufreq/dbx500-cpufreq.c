@@ -14,10 +14,19 @@
 #include <linux/slab.h>
 #include <linux/mfd/dbx500-prcmu.h>
 #include <mach/id.h>
+#include <linux/mfd/db8500-liveopp.h>
+
+static __iomem void *prcmu_base;
+
+#define PRCM_ACK_MB1 0xE04
+#define PRCM_ACK_MB1_CURRENT_ARM_OPP	(PRCM_ACK_MB1 + 0x0)
+
+unsigned int last_idx;
 
 static struct cpufreq_frequency_table db8500_freq_table[] = {
 	[0] = {
 		.index = 0,
+		/* These frequency numbers have no effect on real clock */
 		.frequency = 200000,
 	},
 	[1] = {
@@ -26,15 +35,23 @@ static struct cpufreq_frequency_table db8500_freq_table[] = {
 	},
 	[2] = {
 		.index = 2,
-		.frequency = 800000,
+		.frequency = 600000,
 	},
 	[3] = {
-		/* Used for MAX_OPP, if available */
 		.index = 3,
-		.frequency = CPUFREQ_TABLE_END,
+		.frequency = 800000,
 	},
 	[4] = {
 		.index = 4,
+		.frequency = 1000000,
+	},
+	[5] = {
+		/* Used for MAX_OPP, if available */
+		.index = 5,
+		.frequency = CPUFREQ_TABLE_END,
+	},
+	[6] = {
+		.index = 6,
 		.frequency = CPUFREQ_TABLE_END,
 	},
 };
@@ -64,8 +81,10 @@ static int freq_table_len;
 static enum arm_opp db8500_idx2opp[] = {
 	ARM_EXTCLK,
 	ARM_50_OPP,
+	ARM_50_OPP,
 	ARM_100_OPP,
-	ARM_MAX_OPP
+	ARM_100_OPP,
+	ARM_MAX_OPP,
 };
 
 static enum arm_opp db5500_idx2opp[] = {
@@ -93,6 +112,8 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 	struct cpufreq_freqs freqs;
 	unsigned int idx;
 
+	prcmu_base = __io_address(U8500_PRCMU_BASE);
+
 	/* scale the target frequency to one of the extremes supported */
 	if (target_freq < policy->cpuinfo.min_freq)
 		target_freq = policy->cpuinfo.min_freq;
@@ -118,10 +139,31 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 	BUG_ON(idx >= freq_table_len);
 
 	/* request the PRCM unit for opp change */
+	if (freq_table[idx].frequency!=1200000){
+		if (last_idx==1){
+			db8500_prcmu_set_arm_opp(ARM_100_OPP);
+			prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw_rec, 1);
+			prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBB_REG, &vbb_raw_rec, 1);
+			db8500_prcmu_write(PRCMU_ARMPLL_REG,PLLARM_FREQ100OPP);}
 	if (prcmu_set_arm_opp(idx2opp[idx])) {
 		pr_err("ux500-cpufreq:  Failed to set OPP level\n");
 		return -EINVAL;
 	}
+	if (freq_table[idx].frequency == 1000000) {
+		db8500_prcmu_set_arm_opp(ARM_MAX_OPP);}
+	last_idx=0;
+	} else {
+	last_idx=1;
+	/* OPP */
+	db8500_prcmu_set_arm_opp(ARM_MAX_OPP);
+	/* Varm */
+	prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw, 1);
+	/* VBBp/VBBn */
+	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBB_REG, &vbb_raw, 1);
+	/* Frequency */
+	db8500_prcmu_write(PRCMU_ARMPLL_REG,PLLARM_MAXOPP);
+	db8500_prcmu_write(PRCMU_ARMPLL_REG, 0x0004017D);
+	writeb(ARM_MAX_OPP,(prcmu_base + PRCM_ACK_MB1_CURRENT_ARM_OPP));}
 
 	/* post change notification */
 	for_each_cpu(freqs.cpu, policy->cpus)
@@ -165,7 +207,7 @@ static void __init dbx500_cpufreq_init_maxopp_freq(void)
 	case PRCMU_FW_PROJECT_U8500:
 	case PRCMU_FW_PROJECT_U9500:
 	case PRCMU_FW_PROJECT_U8420:
-		freq_table[3].frequency = 1000000;
+		freq_table[5].frequency = 1200000;
 		break;
 	case PRCMU_FW_PROJECT_U8500_C2:
 	case PRCMU_FW_PROJECT_U9500_C2:
@@ -224,12 +266,14 @@ static int __cpuinit dbx500_cpufreq_init(struct cpufreq_policy *policy)
 		return res;
 	}
 
-	policy->min = policy->cpuinfo.min_freq;
+	/*policy->min = policy->cpuinfo.min_freq;
 	policy->max = policy->cpuinfo.max_freq;
+	policy->cur = dbx500_cpufreq_getspeed(policy->cpu);*/
+	policy->min = 200  * 1000;
+	policy->max = 1000 * 1000;
 	policy->cur = dbx500_cpufreq_getspeed(policy->cpu);
 
-	for (i = 0; freq_table[i].frequency != policy->cur; i++)
-		;
+	for (i = 0; freq_table[i].frequency != policy->cur; i++);
 
 	policy->governor = CPUFREQ_DEFAULT_GOVERNOR;
 
@@ -238,7 +282,8 @@ static int __cpuinit dbx500_cpufreq_init(struct cpufreq_policy *policy)
 	 *	   function with no/some/all drivers in the notification
 	 *	   list.
 	 */
-	policy->cpuinfo.transition_latency = 20 * 1000; /* in ns */
+	/*policy->cpuinfo.transition_latency = 20 * 1000;*/ /* in ns */
+	policy->cpuinfo.transition_latency = 30 * 1000; /* in ns */
 
 	/* policy sharing between dual CPUs */
 	cpumask_copy(policy->cpus, &cpu_present_map);
