@@ -1567,6 +1567,7 @@ static unsigned long pll_rate(void __iomem *reg, unsigned long src_rate,
 	if ((branch == PLL_FIX) || ((branch == PLL_DIV) &&
 		(val & PRCM_PLL_FREQ_DIV2EN) &&
 		((reg == PRCM_PLLSOC0_FREQ) ||
+		 (reg == PRCM_PLLARM_FREQ) ||
 		 (reg == PRCM_PLLDDR_FREQ))))
 		div *= 2;
 

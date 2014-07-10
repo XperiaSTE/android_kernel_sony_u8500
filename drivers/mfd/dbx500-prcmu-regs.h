@@ -134,6 +134,7 @@
 /* PRCMU clock/PLL/reset registers */
 #define PRCM_PLLSOC0_FREQ	   (_PRCMU_BASE + 0x080)
 #define PRCM_PLLSOC1_FREQ	   (_PRCMU_BASE + 0x084)
+#define PRCM_PLLARM_FREQ	   (_PRCMU_BASE + 0x088)
 #define PRCM_PLLDDR_FREQ	   (_PRCMU_BASE + 0x08C)
 #define PRCM_PLL_FREQ_D_SHIFT	0
 #define PRCM_PLL_FREQ_D_MASK	BITS(0, 7)
