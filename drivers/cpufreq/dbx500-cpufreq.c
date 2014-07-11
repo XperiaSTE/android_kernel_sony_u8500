@@ -22,11 +22,11 @@ static __iomem void *prcmu_base;
 #define PRCM_ACK_MB1 0xE04
 #define PRCM_ACK_MB1_CURRENT_ARM_OPP	(PRCM_ACK_MB1 + 0x0)
 
-/* Registers for ARM 100 OPP */
+/* Registers for ARM Voltage for 100 OPP */
 u8 varm_raw_rec=0x24;
 u8 vbb_raw_rec=0xDB;
 
-/* Registers for  1200MHz */
+/* Registers for ARM Voltage for +1.1GHZ */
 u8 varm_raw=0x3F;
 u8 vbb_raw=0x8F;
 
@@ -91,7 +91,7 @@ static enum arm_opp db8500_idx2opp[] = {
 	ARM_EXTCLK,
 	ARM_50_OPP,
 	ARM_50_OPP,
-	ARM_100_OPP,
+	ARM_50_OPP,
 	ARM_100_OPP,
 	ARM_MAX_OPP,
 };
@@ -148,7 +148,7 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 	BUG_ON(idx >= freq_table_len);
 
 	/* request the PRCM unit for opp change */
-	if (freq_table[idx].frequency!=1200000){
+	if (freq_table[idx].frequency!=1150000){
 		if (last_idx==1){
 			db8500_prcmu_set_arm_opp(ARM_100_OPP);
 			prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw_rec, 1);
@@ -163,15 +163,19 @@ static int dbx500_cpufreq_target(struct cpufreq_policy *policy,
 	last_idx=0;
 	} else {
 	last_idx=1;
+
 	/* OPP */
 	db8500_prcmu_set_arm_opp(ARM_MAX_OPP);
+
 	/* Varm */
 	prcmu_abb_write(AB8500_REGU_CTRL2, 0x0B, &varm_raw, 1);
+
 	/* VBBp/VBBn */
 	prcmu_abb_write(AB8500_REGU_CTRL2, AB8500_VBBX_REG, &vbb_raw, 1);
+
 	/* Frequency */
 	db8500_prcmu_write(PRCMU_PLLARM_REG,PLLARM_MAXOPP);
-	db8500_prcmu_write(PRCMU_PLLARM_REG, 0x0004017D);
+	db8500_prcmu_write(PRCMU_PLLARM_REG, 0x0001011E);
 	writeb(ARM_MAX_OPP,(prcmu_base + PRCM_ACK_MB1_CURRENT_ARM_OPP));}
 
 	/* post change notification */
@@ -216,7 +220,7 @@ static void __init dbx500_cpufreq_init_maxopp_freq(void)
 	case PRCMU_FW_PROJECT_U8500:
 	case PRCMU_FW_PROJECT_U9500:
 	case PRCMU_FW_PROJECT_U8420:
-		freq_table[5].frequency = 1200000;
+		freq_table[5].frequency = 1150000;
 		break;
 	case PRCMU_FW_PROJECT_U8500_C2:
 	case PRCMU_FW_PROJECT_U9500_C2:
