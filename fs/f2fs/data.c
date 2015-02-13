@@ -1671,8 +1671,8 @@ static ssize_t f2fs_direct_IO(int rw, struct kiocb *iocb,
 			goto out;
 	}
 
-	err = blockdev_direct_IO(rw, iocb, inode, iov, offset, nr_segs,
-							get_data_block_dio);
+	err = blockdev_direct_IO(rw, iocb, inode, inode->i_sb->s_bdev, iov, offset, nr_segs,
+							get_data_block, NULL);
 out:
 	if (err < 0 && (rw & WRITE))
 		f2fs_write_failed(mapping, offset + count);
